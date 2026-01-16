@@ -170,22 +170,40 @@ const getLeaderboard = async (req, res) => {
       });
     }
 
+    console.log('📊 Leaderboard Request:', {
+      roomId,
+      participantCount: room.participants.length,
+      participants: room.participants.map(p => ({
+        hasUser: !!p.user,
+        teamName: p.teamName,
+        points: p.currentPoints,
+        isBanned: p.isBanned
+      }))
+    });
+
     const leaderboard = room.participants
-      .filter(p => !p.isBanned)
+      .filter(p => p.user && !p.isBanned) // Only include participants with valid user and not banned
       .map(p => ({
         userId: p.user._id,
         username: p.user.username,
-        teamName: p.teamName,
+        teamName: p.user.teamName || p.teamName,
         currentPoints: p.currentPoints,
         isBanned: p.isBanned
       }))
-      .sort((a, b) => b.currentPoints - a.currentPoints);
+      .sort((a, b) => b.currentPoints - a.currentPoints)
+      .map((entry, index) => ({
+        rank: index + 1,
+        ...entry
+      }));
+
+    console.log('📊 Leaderboard Result:', { count: leaderboard.length });
 
     res.status(200).json({
       success: true,
       data: leaderboard
     });
   } catch (error) {
+    console.error('❌ Leaderboard Error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error',

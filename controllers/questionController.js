@@ -4,21 +4,23 @@ const Submission = require('../models/Submission');
 const UnlockCode = require('../models/UnlockCode');
 const Transaction = require('../models/Transaction');
 const { validateMultipleTestCases } = require('../utils/validators');
+const { validateCodeWithTestCases } = require('../utils/codeExecutor');
 const { generateUniqueUnlockCode } = require('../utils/codeGenerator');
 
 const addQuestion = async (req, res) => {
   try {
     const { roomId } = req.params;
-    const { 
-      title, 
-      description, 
-      inputFormat, 
-      outputFormat, 
+    const {
+      title,
+      description,
+      inputFormat,
+      outputFormat,
       constraints,
       examples,
-      testCases, 
-      points, 
-      difficulty 
+      testCases,
+      points,
+      difficulty,
+      accessCode
     } = req.body;
 
     if (!title || !description || !testCases || !points) {
@@ -41,7 +43,8 @@ const addQuestion = async (req, res) => {
       examples,
       testCases,
       points,
-      difficulty
+      difficulty,
+      accessCode
     });
 
     res.status(201).json({
@@ -62,7 +65,7 @@ const getQuestions = async (req, res) => {
     const { roomId } = req.params;
 
     const room = await Room.findById(roomId);
-    
+
     if (!room) {
       return res.status(404).json({
         success: false,
@@ -108,9 +111,9 @@ const getQuestions = async (req, res) => {
     const questionsWithAccess = questions.map((question, index) => {
       const isSolved = solvedQuestionIds.includes(question._id.toString());
       const isFirstQuestion = index === 0;
-      
+
       let hasAccess = isFirstQuestion || isSolved;
-      
+
       if (!hasAccess) {
         const hasUnlockCode = unlockCodes.some(
           code => code.nextQuestion.toString() === question._id.toString()
@@ -170,17 +173,28 @@ const getQuestionById = async (req, res) => {
 const submitAnswer = async (req, res) => {
   try {
     const { roomId, questionId } = req.params;
-    const { userOutput } = req.body;
+    const { userOutput, code, language } = req.body;
 
-    if (!userOutput) {
+    console.log('📝 Submit Answer Request:', {
+      roomId,
+      questionId,
+      hasCode: !!code,
+      hasUserOutput: !!userOutput,
+      language,
+      codeLength: code?.length,
+      userOutputLength: userOutput?.length
+    });
+
+    // Accept either code or userOutput for backwards compatibility
+    if (!userOutput && !code) {
       return res.status(400).json({
         success: false,
-        message: 'User output is required'
+        message: 'Code or output is required'
       });
     }
 
     const room = await Room.findById(roomId);
-    
+
     if (!room) {
       return res.status(404).json({
         success: false,
@@ -232,13 +246,22 @@ const submitAnswer = async (req, res) => {
       });
     }
 
-    const validationResult = validateMultipleTestCases(userOutput, question.testCases);
+    let validationResult;
+
+    // If code is provided, execute it with test cases
+    if (code) {
+      validationResult = await validateCodeWithTestCases(code, question.testCases, language || 'c');
+    } else {
+      // Fallback to direct output comparison
+      validationResult = validateMultipleTestCases(userOutput, question.testCases);
+    }
 
     const submission = await Submission.create({
       user: req.user._id,
       room: roomId,
       question: questionId,
-      userOutput,
+      code: code || userOutput,
+      language: language || 'text',
       status: validationResult.allPassed ? 'correct' : 'incorrect',
       pointsEarned: validationResult.allPassed ? question.points : 0
     });
@@ -262,8 +285,13 @@ const submitAnswer = async (req, res) => {
       });
 
       if (nextQuestion) {
-        const unlockCode = await generateUniqueUnlockCode(UnlockCode);
-        
+        let unlockCode;
+        if (nextQuestion.accessCode) {
+          unlockCode = nextQuestion.accessCode;
+        } else {
+          unlockCode = await generateUniqueUnlockCode(UnlockCode);
+        }
+
         await UnlockCode.create({
           code: unlockCode,
           room: roomId,
@@ -304,10 +332,18 @@ const submitAnswer = async (req, res) => {
       data: {
         status: 'incorrect',
         pointsEarned: 0,
-        testResults: validationResult.results.filter(r => !r.isHidden)
+        testResults: validationResult.results.filter(r => !r.isHidden).map(r => ({
+          input: r.input,
+          expectedOutput: r.expectedOutput,
+          actualOutput: r.actualOutput,
+          passed: r.passed,
+          error: r.error
+        }))
       }
     });
   } catch (error) {
+    console.error('Submit Answer Error:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
       message: 'Server error',

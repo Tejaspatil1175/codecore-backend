@@ -19,6 +19,10 @@ const questionSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Question description is required']
   },
+  accessCode: {
+    type: String,
+    trim: true
+  },
   inputFormat: {
     type: String,
     required: true

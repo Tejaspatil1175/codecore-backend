@@ -18,7 +18,16 @@ const submissionSchema = new mongoose.Schema({
   },
   userOutput: {
     type: String,
-    required: true
+    required: false  // Made optional for backwards compatibility
+  },
+  code: {
+    type: String,
+    required: false  // The submitted code
+  },
+  language: {
+    type: String,
+    default: 'c',
+    enum: ['c', 'cpp', 'python', 'java', 'javascript', 'text']
   },
   status: {
     type: String,

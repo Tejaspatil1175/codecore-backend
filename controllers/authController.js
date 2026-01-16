@@ -6,6 +6,8 @@ const register = async (req, res) => {
   try {
     const { username, email, password, teamName, role } = req.body;
 
+    console.log('📝 Register Request:', { username, email, teamName, role, hasPassword: !!password });
+
     if (!username || !email || !password || !teamName) {
       return res.status(400).json({
         success: false,
@@ -44,6 +46,8 @@ const register = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('❌ Registration Error:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
       message: 'Server error',

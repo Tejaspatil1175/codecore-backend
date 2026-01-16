@@ -12,9 +12,9 @@ const listCodesForSale = async (req, res) => {
       isForSale: true,
       isUsed: false
     })
-    .populate('owner', 'username teamName')
-    .populate('nextQuestion', 'title questionNumber')
-    .select('code sellingPrice owner nextQuestion');
+      .populate('owner', 'username teamName')
+      .populate('nextQuestion', 'title questionNumber')
+      .select('code sellingPrice owner nextQuestion');
 
     res.status(200).json({
       success: true,
@@ -250,8 +250,8 @@ const getMyCodes = async (req, res) => {
       owner: req.user._id,
       isUsed: false
     })
-    .populate('nextQuestion', 'title questionNumber points')
-    .select('code canSell isForSale sellingPrice nextQuestion');
+      .populate('nextQuestion', 'title questionNumber points')
+      .select('code canSell isForSale sellingPrice nextQuestion');
 
     res.status(200).json({
       success: true,
@@ -266,9 +266,133 @@ const getMyCodes = async (req, res) => {
   }
 };
 
+const useUnlockCode = async (req, res) => {
+  console.log('🔓 useUnlockCode request received');
+  console.log('Room ID:', req.params.roomId);
+  console.log('Unlock Code:', req.body.unlockCode);
+  console.log('User ID:', req.user ? req.user._id : 'No User');
+
+  try {
+    const { roomId } = req.params;
+    const { unlockCode } = req.body;
+
+    if (!unlockCode) {
+      console.log('❌ Unlock code missing');
+      return res.status(400).json({
+        success: false,
+        message: 'Unlock code is required'
+      });
+    }
+
+    console.log('🔍 Searching for code...');
+    // Find the unlock code
+    const code = await UnlockCode.findOne({
+      code: { $regex: new RegExp(`^${unlockCode}$`, 'i') },
+      room: roomId,
+      owner: req.user._id,
+      isUsed: false
+    }).populate('nextQuestion', 'title questionNumber');
+
+    if (!code) {
+      console.log('❌ Code not found or invalid ownership');
+      // Debug: Check if code exists at all
+      const exists = await UnlockCode.findOne({ code: { $regex: new RegExp(`^${unlockCode}$`, 'i') }, room: roomId });
+      console.log('Does code exist in room?', exists ? 'Yes' : 'No');
+      if (exists) {
+        console.log('Owner match?', exists.owner.toString() === req.user._id.toString());
+        console.log('Is used?', exists.isUsed);
+      }
+
+      // Check if it's a global access code defined on a Question
+      const Question = require('../models/Question');
+      const targetQuestion = await Question.findOne({
+        room: roomId,
+        accessCode: unlockCode
+      });
+
+      if (targetQuestion) {
+        console.log('✅ Global Access Code found for question:', targetQuestion.title);
+
+        const existingUnlock = await UnlockCode.findOne({
+          room: roomId,
+          owner: req.user._id,
+          nextQuestion: targetQuestion._id
+        });
+
+        if (existingUnlock) {
+          return res.status(200).json({
+            success: true,
+            message: 'Question already unlocked!',
+            data: {
+              questionId: targetQuestion._id,
+              questionTitle: targetQuestion.title,
+              questionNumber: targetQuestion.questionNumber
+            }
+          });
+        }
+
+        await UnlockCode.create({
+          code: unlockCode,
+          room: roomId,
+          nextQuestion: targetQuestion._id,
+          owner: req.user._id,
+          isUsed: true,
+          usedBy: req.user._id,
+          canSell: false
+        });
+
+        return res.status(200).json({
+          success: true,
+          message: 'Question unlocked successfully!',
+          data: {
+            questionId: targetQuestion._id,
+            questionTitle: targetQuestion.title,
+            questionNumber: targetQuestion.questionNumber
+          }
+        });
+      }
+
+      return res.status(404).json({
+        success: false,
+        message: 'Invalid unlock code or you do not own this code'
+      });
+    }
+
+    console.log('✅ Code found:', code.code);
+    console.log('Next Question:', code.nextQuestion);
+
+    // Mark code as used
+    code.isUsed = true;
+    code.usedBy = req.user._id;
+    await code.save();
+    console.log('💾 Code marked as used and saved');
+
+    const response = {
+      success: true,
+      message: 'Question unlocked successfully!',
+      data: {
+        questionId: code.nextQuestion._id,
+        questionTitle: code.nextQuestion.title,
+        questionNumber: code.nextQuestion.questionNumber
+      }
+    };
+    console.log('📤 Sending response:', response);
+
+    return res.status(200).json(response);
+  } catch (error) {
+    console.error('🔥 Server Error inside useUnlockCode:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   listCodesForSale,
   setCodeForSale,
   purchaseCode,
-  getMyCodes
+  getMyCodes,
+  useUnlockCode
 };

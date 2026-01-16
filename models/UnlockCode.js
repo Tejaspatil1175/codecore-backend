@@ -4,8 +4,7 @@ const unlockCodeSchema = new mongoose.Schema({
   code: {
     type: String,
     required: true,
-    unique: true,
-    length: 8
+    trim: true
   },
   room: {
     type: mongoose.Schema.Types.ObjectId,
@@ -15,7 +14,7 @@ const unlockCodeSchema = new mongoose.Schema({
   question: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Question',
-    required: true
+    required: false
   },
   nextQuestion: {
     type: mongoose.Schema.Types.ObjectId,
