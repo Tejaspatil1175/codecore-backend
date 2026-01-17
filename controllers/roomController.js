@@ -33,12 +33,28 @@ const joinRoom = async (req, res) => {
     );
 
     if (alreadyJoined) {
-      return res.status(400).json({
-        success: false,
-        message: 'You have already joined this room'
+      // Check if user is banned
+      if (alreadyJoined.isBanned) {
+        return res.status(403).json({
+          success: false,
+          message: 'You are banned from this room'
+        });
+      }
+
+      // User is already in the room - allow them to rejoin (handle reconnection)
+      return res.status(200).json({
+        success: true,
+        message: 'Rejoined the room successfully',
+        data: {
+          roomId: room._id,
+          roomName: room.roomName,
+          currentPoints: alreadyJoined.currentPoints,
+          isRejoin: true
+        }
       });
     }
 
+    // New user joining the room
     room.participants.push({
       user: req.user._id,
       teamName: req.user.teamName,
@@ -61,7 +77,8 @@ const joinRoom = async (req, res) => {
       data: {
         roomId: room._id,
         roomName: room.roomName,
-        currentPoints: room.initialPoints
+        currentPoints: room.initialPoints,
+        isRejoin: false
       }
     });
   } catch (error) {

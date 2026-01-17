@@ -245,19 +245,24 @@ const getMyCodes = async (req, res) => {
   try {
     const { roomId } = req.params;
 
+    console.log('📋 getMyCodes - User:', req.user._id, 'Room:', roomId);
+
     const codes = await UnlockCode.find({
       room: roomId,
-      owner: req.user._id,
-      isUsed: false
+      owner: req.user._id
     })
       .populate('nextQuestion', 'title questionNumber points')
-      .select('code canSell isForSale sellingPrice nextQuestion');
+      .select('code canSell isForSale sellingPrice nextQuestion isUsed')
+      .sort({ createdAt: -1 }); // Show newest first
+
+    console.log('✅ Found codes:', codes.length);
 
     res.status(200).json({
       success: true,
       data: codes
     });
   } catch (error) {
+    console.error('❌ getMyCodes error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error',
