@@ -298,7 +298,9 @@ const submitAnswer = async (req, res) => {
           question: questionId,
           nextQuestion: nextQuestion._id,
           owner: req.user._id,
-          canSell: true
+          canSell: true,
+          sellingPrice: 50, // Auto-set to 50 points
+          isForSale: true // Automatically list for sale
         });
 
         return res.status(200).json({

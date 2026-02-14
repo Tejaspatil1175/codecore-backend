@@ -38,6 +38,10 @@ const unlockCodeSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
+  soldTo: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
   sellingPrice: {
     type: Number,
     default: 0,
